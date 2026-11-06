@@ -11,6 +11,7 @@ import com.example.podcasts.repository.EpisodeRepository;
 import com.example.podcasts.repository.PublicationSlotRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,10 +31,12 @@ public class PublicationSlotService {
     @Autowired
     private AudioFileRepository audioFileRepository;
 
+    @PreAuthorize("hasRole('ADMIN')")
     public List<PublicationSlot> getAll() {
         return slotRepository.findAll();
     }
 
+    @PreAuthorize("@authz.ownsSlot(authentication, #id)")
     public PublicationSlot getById(Long id) {
         return slotRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -43,6 +46,7 @@ public class PublicationSlotService {
     }
 
     @Transactional
+    @PreAuthorize("#data.podcastId != null and #data.episodeId != null and @authz.ownsPodcast(authentication, #data.podcastId) and @authz.ownsEpisode(authentication, #data.episodeId)")
     public PublicationSlot create(PublicationSlot data) {
 
         if (data.getPodcastId() == null ||
@@ -102,6 +106,7 @@ public class PublicationSlotService {
     }
 
     @Transactional
+    @PreAuthorize("@authz.ownsSlot(authentication, #id)")
     public PublicationSlot update(Long id, PublicationSlot data) {
         PublicationSlot slot = getById(id);
 
@@ -144,6 +149,7 @@ public class PublicationSlotService {
     }
 
     @Transactional
+    @PreAuthorize("@authz.ownsSlot(authentication, #id)")
     public void delete(Long id) {
         PublicationSlot slot = getById(id);
 

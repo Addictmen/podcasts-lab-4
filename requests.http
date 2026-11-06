@@ -1,80 +1,155 @@
-### Создать пользователя (201)
-POST http://localhost:8080/api/users
+@baseUrl = http://127.0.0.1:8080
+@userEmail = owner@example.com
+@userPassword = StrongPassword1!
+@otherEmail = other@example.com
+@otherPassword = OtherPassword1!
+
+### 1. Получить CSRF-токен (cookie XSRF-TOKEN сохраняется HTTP Client автоматически)
+GET {{baseUrl}}/api/csrf
+
+> {% client.global.set("csrfToken", response.body.token); %}
+
+### 2. Регистрация USER через сохранённый endpoint лабораторной №3 (201)
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+
+{
+  "name": "Владелец подкаста",
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}"
+}
+
+> {% client.global.set("userId", response.body.id); %}
+
+### 3. Регистрация второго пользователя (201)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+
+{
+  "name": "Другой пользователь",
+  "email": "{{otherEmail}}",
+  "password": "{{otherPassword}}"
+}
+
+### 4. Слабый пароль (400)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+
+{
+  "name": "Слабый пароль",
+  "email": "weak@example.com",
+  "password": "password"
+}
+
+### 5. Повторный email без учёта регистра (409)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
+
+{
+  "name": "Дубликат",
+  "email": "OWNER@example.com",
+  "password": "AnotherStrong1!"
+}
+
+### 6. Изменяющий запрос без CSRF (403)
+POST {{baseUrl}}/api/podcasts
+Authorization: Basic {{userEmail}} {{userPassword}}
 Content-Type: application/json
 
-{ "name": "Краснов Никита", "email": "ol9999.com@gmail.com" }
+{ "title": "Не будет создан", "authorId": {{userId}}, "status": "ACTIVE" }
 
-### Создать подкаст (201)
-POST http://localhost:8080/api/podcasts
+### 7. Запрос без аутентификации (401)
+GET {{baseUrl}}/api/users/{{userId}}
+
+### 8. Попытка самоназначить ADMIN (403)
+PATCH {{baseUrl}}/api/users/{{userId}}
+Authorization: Basic {{userEmail}} {{userPassword}}
 Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 
-{ "title": "Разговоры о Java", "authorId": 1, "status": "ACTIVE" }
+{ "role": "ADMIN" }
 
-### Создать эпизод (201), длительность в секундах
-POST http://localhost:8080/api/episodes
+### 9. Создать свой подкаст (201)
+POST {{baseUrl}}/api/podcasts
+Authorization: Basic {{userEmail}} {{userPassword}}
 Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 
-{ "podcastId": 1, "title": "Выпуск 1. Spring Boot", "durationSeconds": 1800 }
+{ "title": "Разговоры о Java", "authorId": {{userId}}, "status": "ACTIVE" }
 
-### Слот без аудиофайла (400) - сначала нужен основной файл
-POST http://localhost:8080/api/publication-slots
+> {% client.global.set("podcastId", response.body.id); %}
+
+### 10. Другой USER не может читать чужой подкаст (403)
+GET {{baseUrl}}/api/podcasts/{{podcastId}}
+Authorization: Basic {{otherEmail}} {{otherPassword}}
+
+### 11. Создать эпизод (201)
+POST {{baseUrl}}/api/episodes
+Authorization: Basic {{userEmail}} {{userPassword}}
 Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 
-{ "podcastId": 1, "episodeId": 1, "dateTime": "2030-01-15T12:00:00" }
+{ "podcastId": {{podcastId}}, "title": "Выпуск 1. Spring Boot", "durationSeconds": 1800 }
 
-### Добавить аудиофайл (201), первый файл сразу становится основным
-POST http://localhost:8080/api/audio-files
+> {% client.global.set("episodeId", response.body.id); %}
+
+### 12. Слот без основного файла — бизнес-ошибка (400)
+POST {{baseUrl}}/api/publication-slots
+Authorization: Basic {{userEmail}} {{userPassword}}
 Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 
-{ "episodeId": 1, "path": "/audio/ep1.mp3", "format": "MP3", "sizeBytes": 5000000 }
+{ "podcastId": {{podcastId}}, "episodeId": {{episodeId}}, "dateTime": "2030-01-15T12:00:00" }
 
-### Второй файл, делаем основным (201) - у первого main станет false
-POST http://localhost:8080/api/audio-files
+### 13. Первый аудиофайл автоматически основной (201)
+POST {{baseUrl}}/api/audio-files
+Authorization: Basic {{userEmail}} {{userPassword}}
 Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 
-{ "episodeId": 1, "path": "/audio/ep1.wav", "format": "WAV", "sizeBytes": 9000000, "main": true }
+{ "episodeId": {{episodeId}}, "path": "/audio/ep1.mp3", "format": "MP3", "sizeBytes": 5000000 }
 
-### Все аудиофайлы (200)
-GET http://localhost:8080/api/audio-files
+> {% client.global.set("audioFileId", response.body.id); %}
 
-### Слот в прошлом (400) - время сравнивается с временем сервера
-POST http://localhost:8080/api/publication-slots
+### 14. Дата в прошлом — бизнес-ошибка (400)
+POST {{baseUrl}}/api/publication-slots
+Authorization: Basic {{userEmail}} {{userPassword}}
 Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 
-{ "podcastId": 1, "episodeId": 1, "dateTime": "2020-01-01T10:00:00" }
+{ "podcastId": {{podcastId}}, "episodeId": {{episodeId}}, "dateTime": "2020-01-01T10:00:00" }
 
-### Создать слот (201) - эпизод станет SCHEDULED
-POST http://localhost:8080/api/publication-slots
+### 15. Создать слот, эпизод станет SCHEDULED (201)
+POST {{baseUrl}}/api/publication-slots
+Authorization: Basic {{userEmail}} {{userPassword}}
 Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 
-{ "podcastId": 1, "episodeId": 1, "dateTime": "2030-01-15T12:00:00" }
+{ "podcastId": {{podcastId}}, "episodeId": {{episodeId}}, "dateTime": "2030-01-15T12:00:00" }
 
-### Эпизод (200), publicationState = SCHEDULED
-GET http://localhost:8080/api/episodes/1
+> {% client.global.set("slotId", response.body.id); %}
 
-### Обновить подкаст (200)
-PATCH http://localhost:8080/api/podcasts/1
+### 16. Завершить публикацию, эпизод станет PUBLISHED (200)
+PATCH {{baseUrl}}/api/publication-slots/{{slotId}}
+Authorization: Basic {{userEmail}} {{userPassword}}
 Content-Type: application/json
-
-{ "title": "Разговоры о Java и Spring" }
-
-### Слот выполнен (200) - эпизод станет PUBLISHED
-PATCH http://localhost:8080/api/publication-slots/1
-Content-Type: application/json
+X-XSRF-TOKEN: {{csrfToken}}
 
 { "status": "DONE" }
 
-### Эпизод (200), publicationState = PUBLISHED
-GET http://localhost:8080/api/episodes/1
+### 17. Проверить PUBLISHED (200)
+GET {{baseUrl}}/api/episodes/{{episodeId}}
+Authorization: Basic {{userEmail}} {{userPassword}}
 
-### Удалить не основной аудиофайл (204)
-DELETE http://localhost:8080/api/audio-files/1
+### 18. Удалить пользователя и все связанные данные (204)
+DELETE {{baseUrl}}/api/users/{{userId}}
+Authorization: Basic {{userEmail}} {{userPassword}}
+X-XSRF-TOKEN: {{csrfToken}}
 
-### Удалить пользователя (204) - удалятся его подкасты, эпизоды, файлы и слоты
-DELETE http://localhost:8080/api/users/1
-
-### Проверка: эпизодов не осталось (200, [])
-GET http://localhost:8080/api/episodes
-
-### Несуществующий (404)
-GET http://localhost:8080/api/podcasts/1
+### 19. Удалённые учётные данные больше не работают (401)
+GET {{baseUrl}}/api/podcasts/{{podcastId}}
+Authorization: Basic {{userEmail}} {{userPassword}}

@@ -8,6 +8,7 @@ import com.example.podcasts.repository.AudioFileRepository;
 import com.example.podcasts.repository.EpisodeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,10 +24,12 @@ public class AudioFileService {
     @Autowired
     private EpisodeRepository episodeRepository;
 
+    @PreAuthorize("hasRole('ADMIN')")
     public List<AudioFile> getAll() {
         return audioFileRepository.findAll();
     }
 
+    @PreAuthorize("@authz.ownsAudioFile(authentication, #id)")
     public AudioFile getById(Long id) {
         return audioFileRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -35,6 +38,7 @@ public class AudioFileService {
     }
 
     @Transactional
+    @PreAuthorize("#data.episodeId != null and @authz.ownsEpisode(authentication, #data.episodeId)")
     public AudioFile create(AudioFile data) {
         if (data.getEpisodeId() == null ||
                 data.getPath() == null ||
@@ -80,6 +84,7 @@ public class AudioFileService {
     }
 
     @Transactional
+    @PreAuthorize("@authz.ownsAudioFile(authentication, #id)")
     public AudioFile update(Long id, AudioFile data) {
         AudioFile file = getById(id);
 
@@ -124,6 +129,7 @@ public class AudioFileService {
     }
 
     @Transactional
+    @PreAuthorize("@authz.ownsAudioFile(authentication, #id)")
     public void delete(Long id) {
         AudioFile file = getById(id);
 

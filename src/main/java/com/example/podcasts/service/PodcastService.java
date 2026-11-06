@@ -9,6 +9,7 @@ import com.example.podcasts.repository.PodcastRepository;
 import com.example.podcasts.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,10 +31,12 @@ public class PodcastService {
     @Autowired
     private EpisodeService episodeService;
 
+    @PreAuthorize("hasRole('ADMIN')")
     public List<Podcast> getAll() {
         return podcastRepository.findAll();
     }
 
+    @PreAuthorize("@authz.ownsPodcast(authentication, #id)")
     public Podcast getById(Long id) {
         return podcastRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -43,6 +46,7 @@ public class PodcastService {
     }
 
     @Transactional
+    @PreAuthorize("@authz.canCreatePodcast(authentication, #data.authorId)")
     public Podcast create(Podcast data) {
         if (data.getTitle() == null ||
                 data.getTitle().isBlank() ||
@@ -75,6 +79,7 @@ public class PodcastService {
     }
 
     @Transactional
+    @PreAuthorize("@authz.ownsPodcast(authentication, #id) and (#data.authorId == null or @authz.canCreatePodcast(authentication, #data.authorId))")
     public Podcast update(Long id, Podcast data) {
         Podcast podcast = getById(id);
 
@@ -112,6 +117,7 @@ public class PodcastService {
     }
 
     @Transactional
+    @PreAuthorize("@authz.ownsPodcast(authentication, #id)")
     public void delete(Long id) {
         getById(id);
 
